@@ -13,6 +13,9 @@ import (
 )
 
 // BGPPeerSpec defines the desired state of BGPPeer
+// +kubebuilder:validation:XValidation:rule="has(self.address) != has(self.interfaceRef)", message="exactly one of address or interfaceRef must be specified"
+// +kubebuilder:validation:XValidation:rule="!has(self.interfaceRef) || !has(self.localAddress)", message="localAddress must not be specified for interface-based peers"
+// +kubebuilder:validation:XValidation:rule="type(self.asNumber) != string || self.asNumber != 'external' || has(self.interfaceRef)", message="asNumber external requires interfaceRef"
 type BGPPeerSpec struct {
 	// DeviceName is the name of the Device this object belongs to. The Device object must exist in the same namespace.
 	// Immutable.
@@ -37,12 +40,26 @@ type BGPPeerSpec struct {
 	AdminState AdminState `json:"adminState,omitempty"`
 
 	// Address is the IPv4 address of the BGP peer.
-	// +required
+	// Mutually exclusive with InterfaceRef: exactly one of both must be specified.
+	// +optional
 	// +kubebuilder:validation:Format=ipv4
-	Address string `json:"address"`
+	Address string `json:"address,omitempty"`
+
+	// InterfaceRef is a reference to an Interface resource over which an unnumbered
+	// (interface-based) BGP session is established. The peer is discovered over the
+	// interface's IPv6 link-local address, so the link needs no per-link addressing.
+	// The Interface object must exist in the same namespace and belong to the same Device.
+	// The referenced interface must be configured for unnumbered peering, i.e. it must have
+	// IPv6 link-local addressing enabled and must send IPv6 Router Advertisements
+	// (spec.ipv6.linkLocalOnly and spec.ipv6.routerAdvertisement.enabled).
+	// Mutually exclusive with Address: exactly one of both must be specified.
+	// +optional
+	InterfaceRef *LocalObjectReference `json:"interfaceRef,omitempty"`
 
 	// ASNumber is the autonomous system number (ASN) of the BGP peer.
 	// Supports both plain format (1-4294967295) and dotted notation (1-65535.0-65535) as per RFC 5396.
+	// The special value "external" configures a dynamic AS number, accepting any AS number
+	// that differs from the local one (eBGP). It is only valid together with InterfaceRef.
 	// +required
 	ASNumber intstr.IntOrString `json:"asNumber"`
 
@@ -64,6 +81,16 @@ type BGPPeerSpec struct {
 	// LocalAS configures the local AS number and how it factors into BGP announcements for this peer.
 	// +optional
 	LocalAS *LocalAS `json:"localAS,omitempty"`
+}
+
+// BGPPeerASNumberExternal is the value of BGPPeerSpec.ASNumber that requests a dynamic
+// (unknown) AS number for the peer. The session is established with any AS number that
+// differs from the local one, which is the common setup for unnumbered eBGP peerings.
+const BGPPeerASNumberExternal = "external"
+
+// IsExternalASNumber reports whether the peer is configured with a dynamic AS number.
+func (s *BGPPeerSpec) IsExternalASNumber() bool {
+	return s.ASNumber.Type == intstr.String && s.ASNumber.StrVal == BGPPeerASNumberExternal
 }
 
 // LocalAS defines the local AS configuration and how it factors in BGP announcements.
@@ -254,6 +281,7 @@ const (
 // +kubebuilder:resource:singular=bgppeer
 // +kubebuilder:resource:shortName=peer;bgpneighbor
 // +kubebuilder:printcolumn:name="Peer Address",type=string,JSONPath=`.spec.address`
+// +kubebuilder:printcolumn:name="Peer Interface",type=string,JSONPath=`.spec.interfaceRef.name`
 // +kubebuilder:printcolumn:name="Device",type=string,JSONPath=`.spec.deviceRef.name`
 // +kubebuilder:printcolumn:name="Admin State",type=string,JSONPath=`.spec.adminState`
 // +kubebuilder:printcolumn:name="AS Number",type=string,JSONPath=`.spec.asNumber`

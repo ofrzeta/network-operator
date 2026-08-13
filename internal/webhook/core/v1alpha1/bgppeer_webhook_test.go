@@ -137,6 +137,56 @@ var _ = Describe("BGPPeer Webhook", func() {
 		})
 	})
 
+	Context("When creating an unnumbered BGPPeer under Validating Webhook", func() {
+		BeforeEach(func() {
+			obj.Spec.Address = ""
+			obj.Spec.InterfaceRef = &v1alpha1.LocalObjectReference{Name: "test-interface"}
+		})
+
+		It("Should admit creation with a dynamic AS number", func() {
+			obj.Spec.ASNumber = intstr.FromString(v1alpha1.BGPPeerASNumberExternal)
+			_, err := validator.ValidateCreate(ctx, obj)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("Should admit creation with an explicit AS number", func() {
+			obj.Spec.ASNumber = intstr.FromInt32(65001)
+			_, err := validator.ValidateCreate(ctx, obj)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("Should deny creation with both address and interfaceRef", func() {
+			obj.Spec.Address = "192.168.1.1"
+			obj.Spec.ASNumber = intstr.FromInt32(65001)
+			_, err := validator.ValidateCreate(ctx, obj)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("Should deny creation with neither address nor interfaceRef", func() {
+			obj.Spec.InterfaceRef = nil
+			obj.Spec.ASNumber = intstr.FromInt32(65001)
+			_, err := validator.ValidateCreate(ctx, obj)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("Should deny creation with a local address", func() {
+			obj.Spec.ASNumber = intstr.FromInt32(65001)
+			obj.Spec.LocalAddress = &v1alpha1.BGPPeerLocalAddress{
+				InterfaceRef: v1alpha1.LocalObjectReference{Name: "loopback0"},
+			}
+			_, err := validator.ValidateCreate(ctx, obj)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("Should deny creation with a dynamic AS number on a numbered peer", func() {
+			obj.Spec.Address = "192.168.1.1"
+			obj.Spec.InterfaceRef = nil
+			obj.Spec.ASNumber = intstr.FromString(v1alpha1.BGPPeerASNumberExternal)
+			_, err := validator.ValidateCreate(ctx, obj)
+			Expect(err).To(HaveOccurred())
+		})
+	})
+
 	Context("When updating BGPPeer under Validating Webhook", func() {
 		It("Should admit update with valid AS number", func() {
 			oldObj.Spec.ASNumber = intstr.FromInt32(65001)

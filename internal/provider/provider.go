@@ -511,6 +511,10 @@ type EnsureBGPPeerRequest struct {
 	BGPPeer         *v1alpha1.BGPPeer
 	ProviderConfig  *ProviderConfig
 	SourceInterface string
+	// PeerInterface is the device-level name of the interface referenced by
+	// BGPPeer.Spec.InterfaceRef, e.g. "Ethernet1/1". It is set for unnumbered
+	// (interface-based) peers only and empty for peers identified by an address.
+	PeerInterface string
 	// BGP is the resolved BGP instance referenced by BGPPeer.Spec.BgpRef.
 	BGP *v1alpha1.BGP
 	// VRF is the resolved VRF referenced by BGP.Spec.VrfRef.
@@ -532,6 +536,9 @@ type DeleteBGPPeerRequest struct {
 	// VRF is the resolved VRF referenced by BGP.Spec.VrfRef.
 	// When nil, the provider shall use the default VRF.
 	VRF *v1alpha1.VRF
+	// PeerInterface is the device-level name of the interface referenced by
+	// BGPPeer.Spec.InterfaceRef. See EnsureBGPPeerRequest.PeerInterface.
+	PeerInterface string
 }
 
 type BGPPeerStatusRequest struct {
@@ -540,6 +547,9 @@ type BGPPeerStatusRequest struct {
 	// VRF is the resolved VRF referenced by the BGP instance of this peer.
 	// When nil, the provider shall use the default VRF.
 	VRF *v1alpha1.VRF
+	// PeerInterface is the device-level name of the interface referenced by
+	// BGPPeer.Spec.InterfaceRef. See EnsureBGPPeerRequest.PeerInterface.
+	PeerInterface string
 }
 
 type BGPPeerStatus struct {

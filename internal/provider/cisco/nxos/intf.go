@@ -27,6 +27,7 @@ var (
 	_ gnmiext.DataElement = (*MultisiteIfTracking)(nil)
 	_ gnmiext.DataElement = (*BFD)(nil)
 	_ gnmiext.DataElement = (*ICMPIf)(nil)
+	_ gnmiext.DataElement = (*NDIf)(nil)
 	_ gnmiext.DataElement = (*PortChannel)(nil)
 	_ gnmiext.DataElement = (*PortChannelOperItems)(nil)
 	_ gnmiext.DataElement = (*SwitchVirtualInterface)(nil)
@@ -257,6 +258,71 @@ func (i *ICMPIf) XPath() string {
 	return "System/icmpv4-items/inst-items/dom-items/Dom-list[name=default]/if-items/If-list[id=" + i.ID + "]"
 }
 
+// NDIfList holds the Neighbor Discovery configuration of all interfaces, grouped by VRF.
+type NDIfList struct {
+	DomList gnmiext.List[string, *NDDom] `json:"Dom-list,omitzero"`
+}
+
+func (*NDIfList) XPath() string {
+	return "System/nd-items/inst-items/dom-items"
+}
+
+// GetByInterface returns the Neighbor Discovery configuration of the given interface
+// in every VRF it is configured in.
+func (l *NDIfList) GetByInterface(name string) []*NDIf {
+	items := make([]*NDIf, 0)
+	for _, dom := range l.DomList {
+		for _, item := range dom.IfItems.IfList {
+			if item.ID != name {
+				continue
+			}
+			i := *item
+			i.Vrf = dom.Name
+			items = append(items, &i)
+		}
+	}
+	return items
+}
+
+// NDDom is the Neighbor Discovery configuration of a single VRF.
+type NDDom struct {
+	Name    string `json:"name"`
+	IfItems struct {
+		IfList gnmiext.List[string, *NDIf] `json:"If-list,omitzero"`
+	} `json:"if-items,omitzero"`
+}
+
+func (d *NDDom) Key() string { return d.Name }
+
+// NDIf represents the IPv6 Neighbor Discovery configuration of an interface.
+type NDIf struct {
+	ID   string   `json:"id"`
+	Ctrl NDIfCtrl `json:"ctrl"`
+
+	// Vrf is the VRF the interface is a member of. This field is not serialized to JSON
+	// and is only used internally to determine the correct XPath.
+	Vrf string `json:"-"`
+}
+
+func (n *NDIf) Key() string { return n.ID }
+
+func (*NDIf) IsListItem() {}
+
+func (n *NDIf) XPath() string {
+	return "System/nd-items/inst-items/dom-items/Dom-list[name=" + n.Vrf + "]/if-items/If-list[id=" + n.ID + "]"
+}
+
+// NDIfCtrl is the comma-separated list of Neighbor Discovery controls of an interface.
+// The controls must be listed in alphabetical order.
+type NDIfCtrl string
+
+const (
+	// NDIfCtrlDefault is the device default, sending ICMPv6 redirects and Router Advertisements.
+	NDIfCtrlDefault NDIfCtrl = "redirects"
+	// NDIfCtrlSuppressRA keeps the default controls but stops sending Router Advertisements.
+	NDIfCtrlSuppressRA NDIfCtrl = "redirects,suppress-ra"
+)
+
 // PortChannel represents a port-channel (LAG) interface.
 type PortChannel struct {
 	AccessVlan     string          `json:"accessVlan"`
@@ -384,9 +450,16 @@ func (d *AddrDom) Key() string { return d.Name }
 // AddrItem represents the IP address configuration for an interface.
 // It can hold either IPv4 or IPv6 addresses, determined by the Is6 field.
 type AddrItem struct {
-	ID         string `json:"id"`
+	ID string `json:"id"`
+	// Unnumbered is the interface to borrow the address from. IPv4 only.
 	Unnumbered string `json:"unnumbered,omitempty"`
-	AddrItems  struct {
+	// Forward enables routing of packets on an interface without an address of this
+	// address family, e.g. to carry IPv4 traffic over a link addressed with IPv6 only.
+	Forward AdminSt `json:"forward,omitempty"`
+	// UseLinkLocalAddr configures the interface to use only its automatically generated
+	// link-local address. IPv6 only.
+	UseLinkLocalAddr AdminSt `json:"useLinkLocalAddr,omitempty"`
+	AddrItems        struct {
 		AddrList gnmiext.List[string, *IntfAddr] `json:"Addr-list,omitzero"`
 	} `json:"addr-items,omitzero"`
 

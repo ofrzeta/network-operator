@@ -60,6 +60,31 @@ func init() {
 	})
 	Register("intf_addr4", intfAddr4)
 
+	Register("intf_forward4", &AddrItem{
+		ID:      "eth1/1",
+		Vrf:     DefaultVRFName,
+		Forward: AdminStEnabled,
+	})
+
+	Register("intf_linklocal6", &AddrItem{
+		ID:               "eth1/1",
+		Vrf:              DefaultVRFName,
+		Is6:              true,
+		UseLinkLocalAddr: AdminStEnabled,
+	})
+
+	Register("intf_nd_ra", &NDIf{
+		ID:   "eth1/1",
+		Vrf:  DefaultVRFName,
+		Ctrl: NDIfCtrlDefault,
+	})
+
+	Register("intf_nd_suppress_ra", &NDIf{
+		ID:   "eth1/2",
+		Vrf:  DefaultVRFName,
+		Ctrl: NDIfCtrlSuppressRA,
+	})
+
 	pc := &PortChannel{
 		AccessVlan:     DefaultVLAN,
 		AdminSt:        AdminStUp,

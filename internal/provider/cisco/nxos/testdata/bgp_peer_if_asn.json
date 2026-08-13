@@ -1,0 +1,24 @@
+{
+  "bgp-items": {
+    "inst-items": {
+      "asn": "65000",
+      "dom-items": {
+        "Dom-list": [
+          {
+            "name": "CC-MGMT",
+            "peerif-items": {
+              "PeerIf-list": [
+                {
+                  "id": "eth1/2",
+                  "adminSt": "enabled",
+                  "asn": "65001",
+                  "asnType": "none"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}

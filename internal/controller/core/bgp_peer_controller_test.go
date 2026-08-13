@@ -368,6 +368,159 @@ var _ = Describe("BGPPeer Controller", func() {
 			}).Should(Succeed())
 		})
 
+		It("Should successfully reconcile an unnumbered BGP peer", func() {
+			By("Creating a BGP resource for the Device")
+			bgp := &v1alpha1.BGP{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "test-bgppeer-bgp-",
+					Namespace:    metav1.NamespaceDefault,
+				},
+				Spec: v1alpha1.BGPSpec{
+					DeviceRef: v1alpha1.LocalObjectReference{Name: device.Name},
+					ASNumber:  intstr.FromInt(65000),
+					RouterID:  "10.0.0.10",
+				},
+			}
+			Expect(k8sClient.Create(ctx, bgp)).To(Succeed())
+
+			By("Waiting for the BGP resource to be fully configured")
+			Eventually(func(g Gomega) {
+				b := &v1alpha1.BGP{}
+				g.Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(bgp), b)).To(Succeed())
+				g.Expect(conditions.IsReady(b)).To(BeTrue())
+			}).Should(Succeed())
+
+			By("Creating an unnumbered Physical Interface resource on the same device")
+			intf := &v1alpha1.Interface{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "test-bgppeer-intf-",
+					Namespace:    metav1.NamespaceDefault,
+				},
+				Spec: v1alpha1.InterfaceSpec{
+					DeviceRef:  v1alpha1.LocalObjectReference{Name: device.Name},
+					Name:       "Ethernet1/1",
+					AdminState: v1alpha1.AdminStateUp,
+					Type:       v1alpha1.InterfaceTypePhysical,
+					IPv4:       &v1alpha1.InterfaceIPv4{Forwarding: true},
+					IPv6: &v1alpha1.InterfaceIPv6{
+						LinkLocalOnly:       true,
+						RouterAdvertisement: &v1alpha1.RouterAdvertisement{Enabled: true},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, intf)).To(Succeed())
+
+			By("Creating a BGPPeer resource peering over the Interface")
+			bgppeer := &v1alpha1.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "test-bgppeer-",
+					Namespace:    metav1.NamespaceDefault,
+				},
+				Spec: v1alpha1.BGPPeerSpec{
+					DeviceRef:    v1alpha1.LocalObjectReference{Name: device.Name},
+					BgpRef:       v1alpha1.LocalObjectReference{Name: bgp.Name},
+					InterfaceRef: &v1alpha1.LocalObjectReference{Name: intf.Name},
+					ASNumber:     intstr.FromString(v1alpha1.BGPPeerASNumberExternal),
+				},
+			}
+			Expect(k8sClient.Create(ctx, bgppeer)).To(Succeed())
+
+			By("Verifying the controller updates the status conditions successfully")
+			Eventually(func(g Gomega) {
+				resource := &v1alpha1.BGPPeer{}
+				g.Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(bgppeer), resource)).To(Succeed())
+				g.Expect(resource.Status.Conditions).To(HaveLen(4))
+				g.Expect(resource.Status.Conditions[0].Type).To(Equal(v1alpha1.ReadyCondition))
+				g.Expect(resource.Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
+				g.Expect(resource.Status.Conditions[1].Type).To(Equal(v1alpha1.ConfiguredCondition))
+				g.Expect(resource.Status.Conditions[1].Status).To(Equal(metav1.ConditionTrue))
+			}).Should(Succeed())
+
+			By("Verifying the BGP peer is configured on the interface in the provider")
+			Eventually(func(g Gomega) {
+				g.Expect(testProvider.BGPPeers.Has(intf.Spec.Name)).To(BeTrue(), "Provider should have the unnumbered BGP peer configured")
+			}).Should(Succeed())
+		})
+
+		It("Should reject an unnumbered BGP peer referencing an Interface on a different device", func() {
+			By("Creating a BGP resource for the Device")
+			bgp := &v1alpha1.BGP{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "test-bgppeer-bgp-",
+					Namespace:    metav1.NamespaceDefault,
+				},
+				Spec: v1alpha1.BGPSpec{
+					DeviceRef: v1alpha1.LocalObjectReference{Name: device.Name},
+					ASNumber:  intstr.FromInt(65000),
+					RouterID:  "10.0.0.10",
+				},
+			}
+			Expect(k8sClient.Create(ctx, bgp)).To(Succeed())
+
+			By("Waiting for the BGP resource to be fully configured")
+			Eventually(func(g Gomega) {
+				b := &v1alpha1.BGP{}
+				g.Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(bgp), b)).To(Succeed())
+				g.Expect(conditions.IsReady(b)).To(BeTrue())
+			}).Should(Succeed())
+
+			By("Creating a Physical Interface resource on a different device")
+			intf := &v1alpha1.Interface{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "test-bgppeer-intf-",
+					Namespace:    metav1.NamespaceDefault,
+				},
+				Spec: v1alpha1.InterfaceSpec{
+					DeviceRef:  v1alpha1.LocalObjectReference{Name: "different-device"},
+					Name:       "Ethernet1/2",
+					AdminState: v1alpha1.AdminStateUp,
+					Type:       v1alpha1.InterfaceTypePhysical,
+				},
+			}
+			Expect(k8sClient.Create(ctx, intf)).To(Succeed())
+
+			By("Creating a BGPPeer resource peering over the cross-device Interface")
+			bgppeer := &v1alpha1.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "test-bgppeer-",
+					Namespace:    metav1.NamespaceDefault,
+				},
+				Spec: v1alpha1.BGPPeerSpec{
+					DeviceRef:    v1alpha1.LocalObjectReference{Name: device.Name},
+					BgpRef:       v1alpha1.LocalObjectReference{Name: bgp.Name},
+					InterfaceRef: &v1alpha1.LocalObjectReference{Name: intf.Name},
+					ASNumber:     intstr.FromString(v1alpha1.BGPPeerASNumberExternal),
+				},
+			}
+			Expect(k8sClient.Create(ctx, bgppeer)).To(Succeed())
+
+			By("Verifying the BGP peer rejects the cross-device interface reference")
+			Eventually(func(g Gomega) {
+				resource := &v1alpha1.BGPPeer{}
+				g.Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(bgppeer), resource)).To(Succeed())
+				g.Expect(resource.Status.Conditions).To(HaveLen(4))
+				g.Expect(resource.Status.Conditions[1].Type).To(Equal(v1alpha1.ConfiguredCondition))
+				g.Expect(resource.Status.Conditions[1].Status).To(Equal(metav1.ConditionFalse))
+				g.Expect(resource.Status.Conditions[1].Reason).To(Equal(v1alpha1.CrossDeviceReferenceReason))
+			}).Should(Succeed())
+		})
+
+		It("Should reject a BGP peer with neither address nor interfaceRef", func() {
+			By("Creating a BGPPeer without a peer identity")
+			bgppeer := &v1alpha1.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "test-bgppeer-",
+					Namespace:    metav1.NamespaceDefault,
+				},
+				Spec: v1alpha1.BGPPeerSpec{
+					DeviceRef: v1alpha1.LocalObjectReference{Name: device.Name},
+					BgpRef:    v1alpha1.LocalObjectReference{Name: "some-bgp"},
+					ASNumber:  intstr.FromInt(65000),
+				},
+			}
+			Expect(k8sClient.Create(ctx, bgppeer)).NotTo(Succeed())
+		})
+
 		It("Should set Configured=False with BGPNotFoundReason when bgpRef points to a non-existent BGP", func() {
 			By("Creating a BGPPeer with a non-existent bgpRef")
 			bgppeer := &v1alpha1.BGPPeer{

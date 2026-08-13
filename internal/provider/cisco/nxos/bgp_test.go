@@ -75,6 +75,34 @@ func init() {
 	})
 	Register("bgp_dom_exp", bgpDomExp)
 
+	bgpPeerIf := &BGPPeerIf{
+		VRFName: DefaultVRFName,
+		ID:      "eth1/1",
+		AdminSt: AdminStEnabled,
+		AsnType: PeerAsnTypeExternal,
+		Name:    "Unnumbered peering with spine",
+	}
+	bgpPeerIf.AfItems.PeerAfList.Set(&BGPPeerAfItem{
+		SendComExt: AdminStDisabled,
+		SendComStd: AdminStDisabled,
+		Type:       AddressFamilyIPv4Unicast,
+	})
+	bgpPeerIf.AfItems.PeerAfList.Set(&BGPPeerAfItem{
+		SendComExt: AdminStDisabled,
+		SendComStd: AdminStDisabled,
+		Type:       AddressFamilyIPv6Unicast,
+	})
+	Register("bgp_peer_if", bgpPeerIf)
+
+	bgpPeerIfAsn := &BGPPeerIf{
+		VRFName: "CC-MGMT",
+		ID:      "eth1/2",
+		AdminSt: AdminStEnabled,
+		Asn:     "65001",
+		AsnType: PeerAsnTypeNone,
+	}
+	Register("bgp_peer_if_asn", bgpPeerIfAsn)
+
 	bgpPeerLocalAs := &BGPPeer{
 		VRFName: DefaultVRFName,
 		Addr:    "1.1.1.1",

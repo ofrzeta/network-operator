@@ -1,0 +1,2 @@
+interface Ethernet1/2
+  ipv6 nd suppress-ra

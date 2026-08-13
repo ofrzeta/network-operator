@@ -21,6 +21,9 @@ spec:
     - jsonPath: .spec.address
       name: Peer Address
       type: string
+    - jsonPath: .spec.interfaceRef.name
+      name: Peer Interface
+      type: string
     - jsonPath: .spec.deviceRef.name
       name: Device
       type: string
@@ -88,7 +91,9 @@ spec:
               More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
             properties:
               address:
-                description: Address is the IPv4 address of the BGP peer.
+                description: |-
+                  Address is the IPv4 address of the BGP peer.
+                  Mutually exclusive with InterfaceRef: exactly one of both must be specified.
                 format: ipv4
                 type: string
               addressFamilies:
@@ -287,6 +292,8 @@ spec:
                 description: |-
                   ASNumber is the autonomous system number (ASN) of the BGP peer.
                   Supports both plain format (1-4294967295) and dotted notation (1-65535.0-65535) as per RFC 5396.
+                  The special value "external" configures a dynamic AS number, accepting any AS number
+                  that differs from the local one (eBGP). It is only valid together with InterfaceRef.
                 x-kubernetes-int-or-string: true
               bgpRef:
                 description: |-
@@ -328,6 +335,28 @@ spec:
                 x-kubernetes-validations:
                 - message: DeviceRef is immutable
                   rule: self == oldSelf
+              interfaceRef:
+                description: |-
+                  InterfaceRef is a reference to an Interface resource over which an unnumbered
+                  (interface-based) BGP session is established. The peer is discovered over the
+                  interface's IPv6 link-local address, so the link needs no per-link addressing.
+                  The Interface object must exist in the same namespace and belong to the same Device.
+                  The referenced interface must be configured for unnumbered peering, i.e. it must have
+                  IPv6 link-local addressing enabled and must send IPv6 Router Advertisements
+                  (spec.ipv6.linkLocalOnly and spec.ipv6.routerAdvertisement.enabled).
+                  Mutually exclusive with Address: exactly one of both must be specified.
+                properties:
+                  name:
+                    description: |-
+                      Name of the referent.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    maxLength: 63
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
+                x-kubernetes-map-type: atomic
               localAS:
                 description: LocalAS configures the local AS number and how it factors
                   into BGP announcements for this peer.
@@ -412,11 +441,18 @@ spec:
                 type: object
                 x-kubernetes-map-type: atomic
             required:
-            - address
             - asNumber
             - bgpRef
             - deviceRef
             type: object
+            x-kubernetes-validations:
+            - message: exactly one of address or interfaceRef must be specified
+              rule: has(self.address) != has(self.interfaceRef)
+            - message: localAddress must not be specified for interface-based peers
+              rule: '!has(self.interfaceRef) || !has(self.localAddress)'
+            - message: asNumber external requires interfaceRef
+              rule: type(self.asNumber) != string || self.asNumber != 'external' ||
+                has(self.interfaceRef)
           status:
             description: |-
               Status of the resource. This is set and updated automatically.

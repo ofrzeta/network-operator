@@ -369,6 +369,7 @@ func (r *InterfaceReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Man
 					// Only trigger when fields that affect member Physical interface
 					// reconciliation change (e.g. layer, VRF membership, MTU).
 					return !equality.Semantic.DeepEqual(oldIntf.Spec.IPv4, newIntf.Spec.IPv4) ||
+						!equality.Semantic.DeepEqual(oldIntf.Spec.IPv6, newIntf.Spec.IPv6) ||
 						!equality.Semantic.DeepEqual(oldIntf.Spec.Switchport, newIntf.Spec.Switchport) ||
 						!equality.Semantic.DeepEqual(oldIntf.Spec.VrfRef, newIntf.Spec.VrfRef) ||
 						oldIntf.Spec.MTU != newIntf.Spec.MTU

@@ -297,6 +297,13 @@ spec:
                       device's NVE resource for active-active default gateway redundancy.
                       Only applicable for RoutedVLAN interfaces in EVPN/VXLAN fabrics.
                     type: boolean
+                  forwarding:
+                    default: false
+                    description: |-
+                      Forwarding enables IPv4 forwarding on an interface that has no IPv4 address
+                      assigned. It allows IPv4 traffic to be routed over a link that is only addressed
+                      with IPv6, as used for unnumbered peerings that carry both address families.
+                    type: boolean
                   unnumbered:
                     description: |-
                       Unnumbered defines the unnumbered interface configuration.
@@ -327,6 +334,34 @@ spec:
                   rule: '!has(self.addresses) || !has(self.unnumbered)'
                 - message: anycastGateway and unnumbered are mutually exclusive
                   rule: '!has(self.unnumbered) || !self.anycastGateway'
+                - message: forwarding must not be combined with addresses or unnumbered
+                  rule: '!self.forwarding || (!has(self.addresses) && !has(self.unnumbered))'
+              ipv6:
+                description: IPv6 defines the IPv6 configuration for the interface.
+                properties:
+                  linkLocalOnly:
+                    default: false
+                    description: |-
+                      LinkLocalOnly configures the interface to use only its automatically generated
+                      IPv6 link-local address, without assigning a global IPv6 address.
+                      This is the basis for unnumbered routing protocol peerings over the interface.
+                    type: boolean
+                  routerAdvertisement:
+                    description: |-
+                      RouterAdvertisement controls the transmission of IPv6 Router Advertisements (RAs)
+                      on the interface. Unnumbered BGP peers discover each other's link-local address
+                      through RAs, so RAs must be enabled on interfaces used for unnumbered peering.
+                      When omitted, the device default applies. Note that some platforms, e.g. Cisco NX-OS,
+                      suppress Router Advertisements by default.
+                    properties:
+                      enabled:
+                        description: Enabled indicates whether IPv6 Router Advertisements
+                          are sent on the interface.
+                        type: boolean
+                    required:
+                    - enabled
+                    type: object
+                type: object
               mtu:
                 description: MTU (Maximum Transmission Unit) specifies the size of
                   the largest packet that can be sent over the interface.
@@ -493,6 +528,8 @@ spec:
             x-kubernetes-validations:
             - message: switchport and ipv4 are mutually exclusive
               rule: '!has(self.switchport) || !has(self.ipv4)'
+            - message: switchport and ipv6 are mutually exclusive
+              rule: '!has(self.switchport) || !has(self.ipv6)'
             - message: switchport must not be specified for interfaces of type Loopback
               rule: self.type != 'Loopback' || !has(self.switchport)
             - message: unnumbered ipv4 configuration can only be used for interfaces

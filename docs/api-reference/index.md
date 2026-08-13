@@ -1036,8 +1036,9 @@ _Appears in:_
 | `providerConfigRef` _[TypedLocalObjectReference](#typedlocalobjectreference)_ | ProviderConfigRef is a reference to a resource holding the provider-specific configuration of this interface.<br />This reference is used to link the BGP to its provider-specific configuration. |  | Optional: \{\} <br /> |
 | `bgpRef` _[LocalObjectReference](#localobjectreference)_ | BgpRef is a reference to the BGP instance this peer belongs to.<br />The BGP object must exist in the same namespace. |  | Required: \{\} <br /> |
 | `adminState` _[AdminState](#adminstate)_ | AdminState indicates whether this BGP peer is administratively up or down.<br />When Down, the BGP session with this peer is administratively shut down. | Up | Enum: [Up Down] <br />Optional: \{\} <br /> |
-| `address` _string_ | Address is the IPv4 address of the BGP peer. |  | Format: ipv4 <br />Required: \{\} <br /> |
-| `asNumber` _[IntOrString](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#intorstring-intstr-util)_ | ASNumber is the autonomous system number (ASN) of the BGP peer.<br />Supports both plain format (1-4294967295) and dotted notation (1-65535.0-65535) as per RFC 5396. |  | Required: \{\} <br /> |
+| `address` _string_ | Address is the IPv4 address of the BGP peer.<br />Mutually exclusive with InterfaceRef: exactly one of both must be specified. |  | Format: ipv4 <br />Optional: \{\} <br /> |
+| `interfaceRef` _[LocalObjectReference](#localobjectreference)_ | InterfaceRef is a reference to an Interface resource over which an unnumbered<br />(interface-based) BGP session is established. The peer is discovered over the<br />interface's IPv6 link-local address, so the link needs no per-link addressing.<br />The Interface object must exist in the same namespace and belong to the same Device.<br />The referenced interface must be configured for unnumbered peering, i.e. it must have<br />IPv6 link-local addressing enabled and must send IPv6 Router Advertisements<br />(spec.ipv6.linkLocalOnly and spec.ipv6.routerAdvertisement.enabled).<br />Mutually exclusive with Address: exactly one of both must be specified. |  | Optional: \{\} <br /> |
+| `asNumber` _[IntOrString](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#intorstring-intstr-util)_ | ASNumber is the autonomous system number (ASN) of the BGP peer.<br />Supports both plain format (1-4294967295) and dotted notation (1-65535.0-65535) as per RFC 5396.<br />The special value "external" configures a dynamic AS number, accepting any AS number<br />that differs from the local one (eBGP). It is only valid together with InterfaceRef. |  | Required: \{\} <br /> |
 | `description` _string_ | Description is an optional human-readable description for this BGP peer.<br />This field is used for documentation purposes and may be displayed in management interfaces. |  | Optional: \{\} <br /> |
 | `localAddress` _[BGPPeerLocalAddress](#bgppeerlocaladdress)_ | LocalAddress specifies the local address configuration for the BGP session with this peer.<br />This determines the source address/interface for BGP packets sent to this peer. |  | Optional: \{\} <br /> |
 | `addressFamilies` _[BGPPeerAddressFamilies](#bgppeeraddressfamilies)_ | AddressFamilies configures address family specific settings for this BGP peer.<br />Controls which address families are enabled and their specific configuration. |  | Optional: \{\} <br /> |
@@ -2330,6 +2331,7 @@ _Appears in:_
 | `addresses` _[IPPrefix](#ipprefix) array_ | Addresses defines the list of IPv4 addresses assigned to the interface.<br />The first address in the list is considered the primary address,<br />and any additional addresses are considered secondary addresses. |  | Format: cidr <br />MinItems: 1 <br />Type: string <br />Optional: \{\} <br /> |
 | `unnumbered` _[InterfaceIPv4Unnumbered](#interfaceipv4unnumbered)_ | Unnumbered defines the unnumbered interface configuration.<br />When specified, the interface borrows the IP address from another interface. |  | Optional: \{\} <br /> |
 | `anycastGateway` _boolean_ | AnycastGateway enables distributed anycast gateway functionality.<br />When enabled, this interface uses the virtual MAC configured in the<br />device's NVE resource for active-active default gateway redundancy.<br />Only applicable for RoutedVLAN interfaces in EVPN/VXLAN fabrics. | false | Optional: \{\} <br /> |
+| `forwarding` _boolean_ | Forwarding enables IPv4 forwarding on an interface that has no IPv4 address<br />assigned. It allows IPv4 traffic to be routed over a link that is only addressed<br />with IPv6, as used for unnumbered peerings that carry both address families. | false | Optional: \{\} <br /> |
 
 
 #### InterfaceIPv4Unnumbered
@@ -2348,6 +2350,23 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `interfaceRef` _[LocalObjectReference](#localobjectreference)_ | InterfaceRef is a reference to the interface from which to borrow the IP address.<br />The referenced interface must exist and have at least one IPv4 address configured. |  | Required: \{\} <br /> |
+
+
+#### InterfaceIPv6
+
+
+
+InterfaceIPv6 defines the IPv6 configuration for an interface.
+
+
+
+_Appears in:_
+- [InterfaceSpec](#interfacespec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `linkLocalOnly` _boolean_ | LinkLocalOnly configures the interface to use only its automatically generated<br />IPv6 link-local address, without assigning a global IPv6 address.<br />This is the basis for unnumbered routing protocol peerings over the interface. | false | Optional: \{\} <br /> |
+| `routerAdvertisement` _[RouterAdvertisement](#routeradvertisement)_ | RouterAdvertisement controls the transmission of IPv6 Router Advertisements (RAs)<br />on the interface. Unnumbered BGP peers discover each other's link-local address<br />through RAs, so RAs must be enabled on interfaces used for unnumbered peering.<br />When omitted, the device default applies. Note that some platforms, e.g. Cisco NX-OS,<br />suppress Router Advertisements by default. |  | Optional: \{\} <br /> |
 
 
 #### InterfaceSpec
@@ -2372,6 +2391,7 @@ _Appears in:_
 | `mtu` _integer_ | MTU (Maximum Transmission Unit) specifies the size of the largest packet that can be sent over the interface. |  | Maximum: 9216 <br />Minimum: 576 <br />Optional: \{\} <br /> |
 | `switchport` _[Switchport](#switchport)_ | Switchport defines the switchport configuration for the interface.<br />This is only applicable for Ethernet and Aggregate interfaces. |  | Optional: \{\} <br /> |
 | `ipv4` _[InterfaceIPv4](#interfaceipv4)_ | IPv4 defines the IPv4 configuration for the interface. |  | Optional: \{\} <br /> |
+| `ipv6` _[InterfaceIPv6](#interfaceipv6)_ | IPv6 defines the IPv6 configuration for the interface. |  | Optional: \{\} <br /> |
 | `aggregation` _[Aggregation](#aggregation)_ | Aggregation defines the aggregation (bundle) configuration for the interface.<br />This is only applicable for interfaces of type Aggregate. |  | Optional: \{\} <br /> |
 | `vlanRef` _[LocalObjectReference](#localobjectreference)_ | VlanRef is a reference to the VLAN resource that this interface provides routing for.<br />This is only applicable for interfaces of type RoutedVLAN.<br />The referenced VLAN must exist in the same namespace. |  | Optional: \{\} <br /> |
 | `vrfRef` _[LocalObjectReference](#localobjectreference)_ | VrfRef is a reference to the VRF resource that this interface belongs to.<br />If not specified, the interface will be part of the default VRF.<br />This is only applicable for Layer 3 interfaces.<br />The referenced VRF must exist in the same namespace. |  | Optional: \{\} <br /> |
@@ -3515,6 +3535,22 @@ _Appears in:_
 | `Import` |  |
 | `Export` |  |
 | `Both` |  |
+
+
+#### RouterAdvertisement
+
+
+
+RouterAdvertisement defines the IPv6 Router Advertisement configuration for an interface.
+
+
+
+_Appears in:_
+- [InterfaceIPv6](#interfaceipv6)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `enabled` _boolean_ | Enabled indicates whether IPv6 Router Advertisements are sent on the interface. |  | Required: \{\} <br /> |
 
 
 #### RoutingPolicy

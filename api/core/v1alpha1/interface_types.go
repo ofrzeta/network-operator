@@ -13,6 +13,7 @@ import (
 
 // InterfaceSpec defines the desired state of Interface.
 // +kubebuilder:validation:XValidation:rule="!has(self.switchport) || !has(self.ipv4)", message="switchport and ipv4 are mutually exclusive"
+// +kubebuilder:validation:XValidation:rule="!has(self.switchport) || !has(self.ipv6)", message="switchport and ipv6 are mutually exclusive"
 // +kubebuilder:validation:XValidation:rule="self.type != 'Loopback' || !has(self.switchport)", message="switchport must not be specified for interfaces of type Loopback"
 // +kubebuilder:validation:XValidation:rule="self.type == 'Physical' || !has(self.ipv4) || !has(self.ipv4.unnumbered)", message="unnumbered ipv4 configuration can only be used for interfaces of type Physical"
 // +kubebuilder:validation:XValidation:rule="self.type != 'Aggregate' || has(self.aggregation)", message="aggregation must be specified for interfaces of type Aggregate"
@@ -79,6 +80,10 @@ type InterfaceSpec struct {
 	// IPv4 defines the IPv4 configuration for the interface.
 	// +optional
 	IPv4 *InterfaceIPv4 `json:"ipv4,omitempty"`
+
+	// IPv6 defines the IPv6 configuration for the interface.
+	// +optional
+	IPv6 *InterfaceIPv6 `json:"ipv6,omitempty"`
 
 	// Aggregation defines the aggregation (bundle) configuration for the interface.
 	// This is only applicable for interfaces of type Aggregate.
@@ -233,6 +238,7 @@ const (
 // InterfaceIPv4 defines the IPv4 configuration for an interface.
 // +kubebuilder:validation:XValidation:rule="!has(self.addresses) || !has(self.unnumbered)", message="addresses and unnumbered are mutually exclusive"
 // +kubebuilder:validation:XValidation:rule="!has(self.unnumbered) || !self.anycastGateway", message="anycastGateway and unnumbered are mutually exclusive"
+// +kubebuilder:validation:XValidation:rule="!self.forwarding || (!has(self.addresses) && !has(self.unnumbered))", message="forwarding must not be combined with addresses or unnumbered"
 type InterfaceIPv4 struct {
 	// Addresses defines the list of IPv4 addresses assigned to the interface.
 	// The first address in the list is considered the primary address,
@@ -254,6 +260,47 @@ type InterfaceIPv4 struct {
 	// +optional
 	// +kubebuilder:default=false
 	AnycastGateway bool `json:"anycastGateway,omitempty"`
+
+	// Forwarding enables IPv4 forwarding on an interface that has no IPv4 address
+	// assigned. It allows IPv4 traffic to be routed over a link that is only addressed
+	// with IPv6, as used for unnumbered peerings that carry both address families.
+	// +optional
+	// +kubebuilder:default=false
+	Forwarding bool `json:"forwarding,omitempty"`
+}
+
+// InterfaceIPv6 defines the IPv6 configuration for an interface.
+type InterfaceIPv6 struct {
+	// LinkLocalOnly configures the interface to use only its automatically generated
+	// IPv6 link-local address, without assigning a global IPv6 address.
+	// This is the basis for unnumbered routing protocol peerings over the interface.
+	// +optional
+	// +kubebuilder:default=false
+	LinkLocalOnly bool `json:"linkLocalOnly,omitempty"`
+
+	// RouterAdvertisement controls the transmission of IPv6 Router Advertisements (RAs)
+	// on the interface. Unnumbered BGP peers discover each other's link-local address
+	// through RAs, so RAs must be enabled on interfaces used for unnumbered peering.
+	// When omitted, the device default applies. Note that some platforms, e.g. Cisco NX-OS,
+	// suppress Router Advertisements by default.
+	// +optional
+	RouterAdvertisement *RouterAdvertisement `json:"routerAdvertisement,omitempty"`
+}
+
+// GetRouterAdvertisement returns the Router Advertisement configuration of the interface.
+// It returns nil when the interface has no IPv6 configuration at all.
+func (in *InterfaceIPv6) GetRouterAdvertisement() *RouterAdvertisement {
+	if in == nil {
+		return nil
+	}
+	return in.RouterAdvertisement
+}
+
+// RouterAdvertisement defines the IPv6 Router Advertisement configuration for an interface.
+type RouterAdvertisement struct {
+	// Enabled indicates whether IPv6 Router Advertisements are sent on the interface.
+	// +required
+	Enabled bool `json:"enabled"`
 }
 
 // InterfaceIPv4Unnumbered defines the unnumbered interface configuration.

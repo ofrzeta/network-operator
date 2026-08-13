@@ -82,6 +82,7 @@ export default withMermaid({
                     { text: 'Config Backups', link: '/concepts/config-backup' },
                     { text: 'Pausing Reconciliation', link: '/concepts/pausing' },
                     { text: 'Numbered Resources', link: '/concepts/numbered-resources' },
+                    { text: 'Unnumbered BGP Peering', link: '/concepts/unnumbered-bgp' },
                 ],
             },
             {
